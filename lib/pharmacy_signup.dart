@@ -71,7 +71,7 @@ class _PharmacySignupState extends State<PharmacySignup> {
         // ignore: use_build_context_synchronously
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const PharmacyHomePage()),
+          MaterialPageRoute(builder: (context) => const PharmacyHomepage()),
         );
       }
     } on FirebaseAuthException catch (ex) {
