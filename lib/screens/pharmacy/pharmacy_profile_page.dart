@@ -1,4 +1,5 @@
 import 'package:abc_app/models/user_model.dart';
+import 'package:abc_app/screens/pharmacy/earnings_page.dart';
 import 'package:abc_app/services/firestore_service.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart'; // <-- IMPORT FIREBASE AUTH
@@ -106,7 +107,7 @@ class PharmacyProfilePage extends StatelessWidget {
                     Icons.arrow_forward_ios,
                         () {
                       // Navigate to Earnings Page
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const PlaceholderPage(title: 'Earnings')));
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const EarningsPage()));
                     },
                   ),
                   _buildProfileOption(
