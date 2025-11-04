@@ -21,8 +21,8 @@ class CartItemModel {
     required this.quantity,
   });
 
-  // From Firestore document (when reading from cart stream)
-  factory CartItemModel.fromMap(DocumentSnapshot doc) {
+  // From Firestore DocumentSnapshot (when reading from cart stream)
+  factory CartItemModel.fromSnapshot(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     return CartItemModel(
       id: doc.id,
@@ -37,7 +37,7 @@ class CartItemModel {
   }
 
   // From a plain Map (used when reading from an Order)
-  factory CartItemModel.fromDataMap(Map<String, dynamic> data) {
+  factory CartItemModel.fromMap(Map<String, dynamic> data) {
     return CartItemModel(
       id: data['id'] ?? '',
       medicineId: data['medicineId'] ?? '',
