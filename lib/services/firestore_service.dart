@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:abc_app/models/address_model.dart';
-import 'package:abc_app/models/cart_model.dart';
+import 'package:abc_app/models/cart_item_model.dart';
 import 'package:abc_app/models/medicine_model.dart';
 import 'package:abc_app/models/notification_model.dart';
 import 'package:abc_app/models/order_model.dart';
@@ -160,6 +160,7 @@ class FirestoreService {
     }
   }
 
+// In FirestoreService - update getCartStream method
   Stream<List<CartItemModel>> getCartStream() {
     final String? uid = currentUserId;
     if (uid == null) return Stream.value([]);
@@ -169,7 +170,7 @@ class FirestoreService {
         .collection('cart')
         .snapshots()
         .map((snapshot) =>
-        snapshot.docs.map((doc) => CartItemModel.fromMap(doc)).toList());
+        snapshot.docs.map((doc) => CartItemModel.fromSnapshot(doc)).toList());
   }
 
   Future<void> updateCartQuantity(String cartItemId, int newQuantity) async {
@@ -211,6 +212,7 @@ class FirestoreService {
   }
 
   // --- Address Functions ---
+// In FirestoreService - update getAddresses method
   Stream<List<AddressModel>> getAddresses() {
     final String? uid = currentUserId;
     if (uid == null) return Stream.value([]);
@@ -220,7 +222,7 @@ class FirestoreService {
         .collection('addresses')
         .snapshots()
         .map((snapshot) =>
-        snapshot.docs.map((doc) => AddressModel.fromMap(doc)).toList());
+        snapshot.docs.map((doc) => AddressModel.fromSnapshot(doc)).toList());
   }
 
   Future<void> addAddress(AddressModel address) async {
@@ -297,8 +299,9 @@ class FirestoreService {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) =>
-        snapshot.docs.map((doc) => OrderModel.fromMap(doc)).toList());
+        snapshot.docs.map((doc) => OrderModel.fromSnapshot(doc)).toList());
   }
+
   Stream<List<OrderModel>> getPharmacyOrders() {
     final String? uid = currentUserId;
     if (uid == null) return Stream.value([]);
@@ -308,7 +311,7 @@ class FirestoreService {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) =>
-        snapshot.docs.map((doc) => OrderModel.fromMap(doc)).toList());
+        snapshot.docs.map((doc) => OrderModel.fromSnapshot(doc)).toList());
   }
 
   // This function is for the Earning Page
