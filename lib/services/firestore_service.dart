@@ -1,9 +1,24 @@
+import 'dart:io';
+import 'package:abc_app/models/address_model.dart';
+import 'package:abc_app/models/cart_item_model.dart';
+import 'package:abc_app/models/medicine_model.dart';
+import 'package:abc_app/models/notification_model.dart';
+import 'package:abc_app/models/order_model.dart';
+import 'package:abc_app/models/user_model.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloudinary_public/cloudinary_public.dart';
+
+import '../models/ad_model.dart';
+import '../models/payment_model.dart';
+
+class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   final CloudinaryPublic _cloudinary = CloudinaryPublic(
-      'dfqqs04rn', // Your Cloud Name
-      'ml_default', // Your Upload Preset
+      'dfqqs04rn',
+      'ml_default',
       cache: false
   );
 
@@ -58,7 +73,23 @@
     if (user.uid.isEmpty) {
       throw Exception('User ID is required to update user.');
     }
-    await _db.collection('users').doc(user.uid).update(user.toMap());
+    try {
+      await _db.collection('users').doc(user.uid).update(user.toMap());
+    } catch (e) {
+      print('Error updating user: $e');
+      throw Exception('Failed to update user profile');
+    }
+  }
+
+  // --- Pharmacy Functions ---
+  Stream<List<UserModel>> getPharmacies() {
+    return _db
+        .collection('users')
+        .where('role', isEqualTo: 'pharmacy')
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+        .map((doc) => UserModel.fromMap(doc.data() as Map<String, dynamic>))
+        .toList());
   }
 
   Future<UserModel?> getPharmacyById(String pharmacyId) async {
@@ -82,6 +113,16 @@
         .map((snapshot) => snapshot.docs
         .map((doc) => UserModel.fromMap(doc.data() as Map<String, dynamic>))
         .where((user) => user.uid != currentPharmacyId)
+        .toList());
+  }
+
+  Stream<List<MedicineModel>> getPharmacyMedicines(String pharmacyId) {
+    return _db
+        .collection('medicines')
+        .where('pharmacyId', isEqualTo: pharmacyId)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+        .map((doc) => MedicineModel.fromMap(doc.data(), doc.id))
         .toList());
   }
 
@@ -120,338 +161,9 @@
         .where((medicine) => medicine.id != currentMedicineId)
         .toList());
   }
-// Add to FirestoreService class
 
-// Payment Functions
-  Future<void> createPayment(PaymentModel payment) async {
-    await _db.collection('payments').add(payment.toMap());
-  }
-
-  Future<void> updatePaymentStatus(String paymentId, String status, {
-    String? razorpayPaymentId,
-    String? razorpaySignature,
-    String? failureReason,
-  }) async {
-    Map<String, dynamic> updateData = {
-      'status': status,
-      'updatedAt': Timestamp.now(),
-    };
-
-    if (razorpayPaymentId != null) {
-      updateData['razorpayPaymentId'] = razorpayPaymentId;
-    }
-    if (razorpaySignature != null) {
-      updateData['razorpaySignature'] = razorpaySignature;
-    }
-    if (failureReason != null) {
-      updateData['failureReason'] = failureReason;
-    }
-
-    await _db.collection('payments').doc(paymentId).update(updateData);
-  }
-
-  Future<PaymentModel?> getPaymentByOrderId(String orderId) async {
-    try {
-      QuerySnapshot snapshot = await _db
-          .collection('payments')
-          .where('orderId', isEqualTo: orderId)
-          .limit(1)
-          .get();
-
-      if (snapshot.docs.isNotEmpty) {
-        return PaymentModel.fromSnapshot(snapshot.docs.first);
-      }
-      return null;
-    } catch (e) {
-      print('Error getting payment: $e');
-      return null;
-    }
-  }
-  // --- Cart Functions ---
-  Future<void> addToCart(MedicineModel medicine) async {
-    final String? uid = currentUserId;
-    if (uid == null) throw Exception('User not logged in');
-    CollectionReference cart = _db.collection('users').doc(uid).collection('cart');
-    QuerySnapshot existingItem = await cart.where('medicineId', isEqualTo: medicine.id).limit(1).get();
-
-    if (existingItem.docs.isNotEmpty) {
-      DocumentSnapshot cartDoc = existingItem.docs.first;
-      int newQuantity = (cartDoc['quantity'] ?? 0) + 1;
-      await cart.doc(cartDoc.id).update({'quantity': newQuantity});
-    } else {
-      UserModel? pharmacy = await getPharmacyById(medicine.pharmacyId);
-      String pName = pharmacy?.pharmacyName ?? pharmacy?.name ?? 'Unknown Pharmacy';
-      Map<String, dynamic> newItem = {
-        'medicineId': medicine.id,
-        'medicineName': medicine.medicineName,
-        'imageUrl': medicine.imageUrl,
-        'price': medicine.price,
-        'quantity': 1,
-        'pharmacyId': medicine.pharmacyId,
-        'pharmacyName': pName,
-      };
-      await cart.add(newItem);
-    }
-  }
-
-// In FirestoreService - update getCartStream method
-  Stream<List<CartItemModel>> getCartStream() {
-    final String? uid = currentUserId;
-    if (uid == null) return Stream.value([]);
-    return _db
-        .collection('users')
-        .doc(uid)
-        .collection('cart')
-        .snapshots()
-        .map((snapshot) =>
-        snapshot.docs.map((doc) => CartItemModel.fromSnapshot(doc)).toList());
-  }
-
-  Future<void> updateCartQuantity(String cartItemId, int newQuantity) async {
-    final String? uid = currentUserId;
-    if (uid == null) return;
-    if (newQuantity > 0) {
-      await _db
-          .collection('users')
-          .doc(uid)
-          .collection('cart')
-          .doc(cartItemId)
-          .update({'quantity': newQuantity});
-    } else {
-      await removeFromCart(cartItemId);
-    }
-  }
-
-  Future<void> removeFromCart(String cartItemId) async {
-    final String? uid = currentUserId;
-    if (uid == null) return;
-    await _db
-        .collection('users')
-        .doc(uid)
-        .collection('cart')
-        .doc(cartItemId)
-        .delete();
-  }
-
-  Future<void> clearCart() async {
-    final String? uid = currentUserId;
-    if (uid == null) return;
-    final cartCollection = _db.collection('users').doc(uid).collection('cart');
-    final snapshot = await cartCollection.get();
-    WriteBatch batch = _db.batch();
-    for (var doc in snapshot.docs) {
-      batch.delete(doc.reference);
-    }
-    await batch.commit();
-  }
-
-  // --- Address Functions ---
-// In FirestoreService - update getAddresses method
-  Stream<List<AddressModel>> getAddresses() {
-    final String? uid = currentUserId;
-    if (uid == null) return Stream.value([]);
-    return _db
-        .collection('users')
-        .doc(uid)
-        .collection('addresses')
-        .snapshots()
-        .map((snapshot) =>
-        snapshot.docs.map((doc) => AddressModel.fromSnapshot(doc)).toList());
-  }
-
-  Future<void> addAddress(AddressModel address) async {
-    final String? uid = currentUserId;
-    if (uid == null) throw Exception('User not logged in');
-    await _db
-        .collection('users')
-        .doc(uid)
-        .collection('addresses')
-        .add(address.toMap());
-  }
-
-  Future<void> deleteAddress(String addressId) async {
-    final String? uid = currentUserId;
-    if (uid == null) return;
-    await _db
-        .collection('users')
-        .doc(uid)
-        .collection('addresses')
-        .doc(addressId)
-        .delete();
-  }
-
-  Future<void> setDefaultAddress(String addressId) async {
-    final String? uid = currentUserId;
-    if (uid == null) return;
-    final CollectionReference addressesRef =
-    _db.collection('users').doc(uid).collection('addresses');
-    WriteBatch batch = _db.batch();
-    QuerySnapshot allAddresses = await addressesRef.get();
-    for (var doc in allAddresses.docs) {
-      batch.update(doc.reference, {'isDefault': false});
-    }
-    DocumentReference newDefaultRef = addressesRef.doc(addressId);
-    batch.update(newDefaultRef, {'isDefault': true});
-    await batch.commit();
-  }
-
-  // --- Order Functions ---
-  Future<void> placeOrder(OrderModel order) async {
-    try {
-      if (order.userId.isEmpty) throw Exception('User not logged in');
-
-      print('Creating order in Firestore...');
-
-      // Validate the address has an ID
-      if (order.shippingAddress.id == null || order.shippingAddress.id!.isEmpty) {
-        throw Exception('Shipping address ID is empty');
-      }
-
-      // 1. Create the order
-      DocumentReference orderRef = await _db.collection('orders').add(order.toMap());
-      print('Order created with ID: ${orderRef.id}');
-
-      // 2. Create notification for the PHARMACY
-      await createNotification(
-        userId: order.pharmacyId,
-        title: 'New Order Received!',
-        body: 'You have a new order (#${orderRef.id.substring(0, 6)}) from ${order.shippingAddress.title}.',
-        orderId: orderRef.id,
-      );
-      print('Notification created for pharmacy');
-
-      // 3. Create an "earning" document for the pharmacy
-      await _db.collection('earnings').add({
-        'pharmacyId': order.pharmacyId,
-        'orderId': orderRef.id,
-        'amount': order.total,
-        'createdAt': order.createdAt,
-        'status': 'Pending',
-      });
-      print('Earnings document created');
-
-      // 4. Clear the user's cart
-      await clearCart();
-      print('Cart cleared successfully');
-
-    } catch (e) {
-      print('Error in placeOrder: $e');
-      rethrow;
-    }
-  }
-
-  Stream<List<OrderModel>> getPatientOrders() {
-    final String? uid = currentUserId;
-    if (uid == null) return Stream.value([]);
-
-    return _db
-        .collection('orders')
-        .where('userId', isEqualTo: uid)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) =>
-        snapshot.docs.map((doc) => OrderModel.fromSnapshot(doc)).toList());
-  }
-
-  Stream<List<OrderModel>> getPharmacyOrders() {
-    final String? uid = currentUserId;
-    if (uid == null) return Stream.value([]);
-    return _db
-        .collection('orders')
-        .where('pharmacyId', isEqualTo: uid)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) =>
-        snapshot.docs.map((doc) => OrderModel.fromSnapshot(doc)).toList());
-  }
-
-  // This function is for the Earning Page
-  Stream<QuerySnapshot> getPharmacyEarnings() {
-    final String? uid = currentUserId;
-    if (uid == null) {
-      return const Stream.empty();
-    }
-    return _db
-        .collection('earnings')
-        .where('pharmacyId', isEqualTo: uid)
-        .orderBy('createdAt', descending: true)
-        .snapshots();
-  }
-
-
-  Future<void> updateOrderStatus(String orderId, String status, String userId, {String? cancellationReason}) async {
-    Map<String, dynamic> dataToUpdate = {'status': status};
-    if (cancellationReason != null) {
-      dataToUpdate['cancellationReason'] = cancellationReason;
-    }
-    await _db.collection('orders').doc(orderId).update(dataToUpdate);
-
-    // If delivered, update the earning status
-    if (status == 'Delivered') {
-      QuerySnapshot earningSnap = await _db.collection('earnings').where('orderId', isEqualTo: orderId).limit(1).get();
-      if (earningSnap.docs.isNotEmpty) {
-        await earningSnap.docs.first.reference.update({'status': 'Completed'});
-      }
-    }
-
-    // Send notification to the PATIENT
-    await createNotification(
-      userId: userId,
-      title: 'Order $status',
-      body: 'Your order (#${orderId.substring(0, 6)}) has been $status.',
-      orderId: orderId,
-    );
-  }
-
-  // --- Notification Functions ---
-  Future<void> createNotification({
-    required String userId,
-    required String title,
-    required String body,
-    String? orderId,
-  }) async {
-    final notif = NotificationModel(
-      userId: userId,
-      title: title,
-      body: body,
-      createdAt: Timestamp.now(),
-      orderId: orderId,
-    );
-    await _db.collection('users').doc(userId).collection('notifications').add(notif.toMap());
-  }
-
-  Stream<List<NotificationModel>> getNotifications() {
-    final String? uid = currentUserId;
-    if (uid == null) return Stream.value([]);
-    return _db
-        .collection('users')
-        .doc(uid)
-        .collection('notifications')
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) =>
-        snapshot.docs.map((doc) => NotificationModel.fromMap(doc)).toList());
-  }
-
-  // --- Rating Function ---
-  Future<void> submitRating(MedicineModel medicine, double rating, String review) async {
-    final double newRating = ((medicine.rating * medicine.reviewCount) + rating) / (medicine.reviewCount + 1);
-    final int newReviewCount = medicine.reviewCount + 1;
-    await _db.collection('medicines').doc(medicine.id).update({
-      'rating': newRating,
-      'reviewCount': newReviewCount,
-    });
-    await _db.collection('medicines').doc(medicine.id).collection('reviews').add({
-      'userId': currentUserId,
-      'rating': rating,
-      'review': review,
-      'createdAt': Timestamp.now(),
-    });
-  }
-
-  // --- Pharmacy (Inventory) Functions ---
-  // (These are duplicated in your file, I am only keeping one set)
-  Stream<List<MedicineModel>> getPharmacyMedicines() {
+  // --- Current Pharmacy Inventory Functions ---
+  Stream<List<MedicineModel>> getCurrentPharmacyMedicines() {
     final String? uid = currentUserId;
     if (uid == null) return Stream.value([]);
 
@@ -460,8 +172,7 @@
         .where('pharmacyId', isEqualTo: uid)
         .snapshots()
         .map((snapshot) => snapshot.docs
-        .map((doc) =>
-        MedicineModel.fromMap(doc.data(), doc.id))
+        .map((doc) => MedicineModel.fromMap(doc.data(), doc.id))
         .toList());
   }
 
@@ -535,3 +246,388 @@
       'inStock': newQuantity > 0,
     });
   }
+
+  // --- Payment Functions ---
+  Future<void> createPayment(PaymentModel payment) async {
+    await _db.collection('payments').add(payment.toMap());
+  }
+
+  Future<void> updatePaymentStatus(String paymentId, String status, {
+    String? razorpayPaymentId,
+    String? razorpaySignature,
+    String? failureReason,
+  }) async {
+    Map<String, dynamic> updateData = {
+      'status': status,
+      'updatedAt': Timestamp.now(),
+    };
+
+    if (razorpayPaymentId != null) {
+      updateData['razorpayPaymentId'] = razorpayPaymentId;
+    }
+    if (razorpaySignature != null) {
+      updateData['razorpaySignature'] = razorpaySignature;
+    }
+    if (failureReason != null) {
+      updateData['failureReason'] = failureReason;
+    }
+
+    await _db.collection('payments').doc(paymentId).update(updateData);
+  }
+
+  Future<PaymentModel?> getPaymentByOrderId(String orderId) async {
+    try {
+      QuerySnapshot snapshot = await _db
+          .collection('payments')
+          .where('orderId', isEqualTo: orderId)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        return PaymentModel.fromSnapshot(snapshot.docs.first);
+      }
+      return null;
+    } catch (e) {
+      print('Error getting payment: $e');
+      return null;
+    }
+  }
+
+  // --- Ad Functions ---
+  Future<String> uploadAdImage(File imageFile) async {
+    if (!await imageFile.exists()) {
+      throw Exception('File does not exist. Please pick the image again.');
+    }
+    try {
+      CloudinaryResponse response = await _cloudinary.uploadFile(
+        CloudinaryFile.fromFile(imageFile.path,
+            resourceType: CloudinaryResourceType.Image,
+            folder: 'ad_images'
+        ),
+      );
+      if (response.secureUrl.isNotEmpty) {
+        return response.secureUrl;
+      } else {
+        throw Exception('Upload failed but no error message provided.');
+      }
+    } catch (e) {
+      print('Error uploading ad image to Cloudinary: $e');
+      throw Exception('Failed to upload ad image. Check your Cloud Name and Upload Preset.');
+    }
+  }
+
+  Future<void> addAd(AdModel ad) async {
+    try {
+      await _db.collection('ads').add(ad.toMap());
+    } catch (e) {
+      print('Error adding ad: $e');
+      throw Exception('Failed to add ad');
+    }
+  }
+
+  Stream<List<AdModel>> getActiveAds() {
+    return _db
+        .collection('ads')
+        .where('isActive', isEqualTo: true)
+        .where('endDate', isGreaterThan: Timestamp.now())
+        .orderBy('endDate')
+        .snapshots()
+        .map((snapshot) =>
+        snapshot.docs.map((doc) => AdModel.fromSnapshot(doc)).toList());
+  }
+
+  Stream<List<AdModel>> getPharmacyAds() {
+    final String? uid = currentUserId;
+    if (uid == null) return Stream.value([]);
+
+    return _db
+        .collection('ads')
+        .where('pharmacyId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) =>
+        snapshot.docs.map((doc) => AdModel.fromSnapshot(doc)).toList());
+  }
+
+  Future<void> updateAdStatus(String adId, bool isActive) async {
+    await _db.collection('ads').doc(adId).update({
+      'isActive': isActive,
+      'updatedAt': Timestamp.now(),
+    });
+  }
+
+  Future<void> deleteAd(String adId) async {
+    await _db.collection('ads').doc(adId).delete();
+  }
+
+  // --- Cart Functions ---
+  Future<void> addToCart(MedicineModel medicine) async {
+    final String? uid = currentUserId;
+    if (uid == null) throw Exception('User not logged in');
+    CollectionReference cart = _db.collection('users').doc(uid).collection('cart');
+    QuerySnapshot existingItem = await cart.where('medicineId', isEqualTo: medicine.id).limit(1).get();
+
+    if (existingItem.docs.isNotEmpty) {
+      DocumentSnapshot cartDoc = existingItem.docs.first;
+      int newQuantity = (cartDoc['quantity'] ?? 0) + 1;
+      await cart.doc(cartDoc.id).update({'quantity': newQuantity});
+    } else {
+      UserModel? pharmacy = await getPharmacyById(medicine.pharmacyId);
+      String pName = pharmacy?.pharmacyName ?? pharmacy?.name ?? 'Unknown Pharmacy';
+      Map<String, dynamic> newItem = {
+        'medicineId': medicine.id,
+        'medicineName': medicine.medicineName,
+        'imageUrl': medicine.imageUrl,
+        'price': medicine.price,
+        'quantity': 1,
+        'pharmacyId': medicine.pharmacyId,
+        'pharmacyName': pName,
+      };
+      await cart.add(newItem);
+    }
+  }
+
+  Stream<List<CartItemModel>> getCartStream() {
+    final String? uid = currentUserId;
+    if (uid == null) return Stream.value([]);
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('cart')
+        .snapshots()
+        .map((snapshot) =>
+        snapshot.docs.map((doc) => CartItemModel.fromSnapshot(doc)).toList());
+  }
+
+  Future<void> updateCartQuantity(String cartItemId, int newQuantity) async {
+    final String? uid = currentUserId;
+    if (uid == null) return;
+    if (newQuantity > 0) {
+      await _db
+          .collection('users')
+          .doc(uid)
+          .collection('cart')
+          .doc(cartItemId)
+          .update({'quantity': newQuantity});
+    } else {
+      await removeFromCart(cartItemId);
+    }
+  }
+
+  Future<void> removeFromCart(String cartItemId) async {
+    final String? uid = currentUserId;
+    if (uid == null) return;
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('cart')
+        .doc(cartItemId)
+        .delete();
+  }
+
+  Future<void> clearCart() async {
+    final String? uid = currentUserId;
+    if (uid == null) return;
+    final cartCollection = _db.collection('users').doc(uid).collection('cart');
+    final snapshot = await cartCollection.get();
+    WriteBatch batch = _db.batch();
+    for (var doc in snapshot.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+  }
+
+  // --- Address Functions ---
+  Stream<List<AddressModel>> getAddresses() {
+    final String? uid = currentUserId;
+    if (uid == null) return Stream.value([]);
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('addresses')
+        .snapshots()
+        .map((snapshot) =>
+        snapshot.docs.map((doc) => AddressModel.fromSnapshot(doc)).toList());
+  }
+
+  Future<void> addAddress(AddressModel address) async {
+    final String? uid = currentUserId;
+    if (uid == null) throw Exception('User not logged in');
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('addresses')
+        .add(address.toMap());
+  }
+
+  Future<void> deleteAddress(String addressId) async {
+    final String? uid = currentUserId;
+    if (uid == null) return;
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('addresses')
+        .doc(addressId)
+        .delete();
+  }
+
+  Future<void> setDefaultAddress(String addressId) async {
+    final String? uid = currentUserId;
+    if (uid == null) return;
+    final CollectionReference addressesRef =
+    _db.collection('users').doc(uid).collection('addresses');
+    WriteBatch batch = _db.batch();
+    QuerySnapshot allAddresses = await addressesRef.get();
+    for (var doc in allAddresses.docs) {
+      batch.update(doc.reference, {'isDefault': false});
+    }
+    DocumentReference newDefaultRef = addressesRef.doc(addressId);
+    batch.update(newDefaultRef, {'isDefault': true});
+    await batch.commit();
+  }
+
+  // --- Order Functions ---
+  Future<void> placeOrder(OrderModel order) async {
+    try {
+      if (order.userId.isEmpty) throw Exception('User not logged in');
+
+      print('Creating order in Firestore...');
+
+      if (order.shippingAddress.id == null || order.shippingAddress.id!.isEmpty) {
+        throw Exception('Shipping address ID is empty');
+      }
+
+      DocumentReference orderRef = await _db.collection('orders').add(order.toMap());
+      print('Order created with ID: ${orderRef.id}');
+
+      await createNotification(
+        userId: order.pharmacyId,
+        title: 'New Order Received!',
+        body: 'You have a new order (#${orderRef.id.substring(0, 6)}) from ${order.shippingAddress.title}.',
+        orderId: orderRef.id,
+      );
+      print('Notification created for pharmacy');
+
+      await _db.collection('earnings').add({
+        'pharmacyId': order.pharmacyId,
+        'orderId': orderRef.id,
+        'amount': order.total,
+        'createdAt': order.createdAt,
+        'status': 'Pending',
+      });
+      print('Earnings document created');
+
+      await clearCart();
+      print('Cart cleared successfully');
+
+    } catch (e) {
+      print('Error in placeOrder: $e');
+      rethrow;
+    }
+  }
+
+  Stream<List<OrderModel>> getPatientOrders() {
+    final String? uid = currentUserId;
+    if (uid == null) return Stream.value([]);
+
+    return _db
+        .collection('orders')
+        .where('userId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) =>
+        snapshot.docs.map((doc) => OrderModel.fromSnapshot(doc)).toList());
+  }
+
+  Stream<List<OrderModel>> getPharmacyOrders() {
+    final String? uid = currentUserId;
+    if (uid == null) return Stream.value([]);
+    return _db
+        .collection('orders')
+        .where('pharmacyId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) =>
+        snapshot.docs.map((doc) => OrderModel.fromSnapshot(doc)).toList());
+  }
+
+  Stream<QuerySnapshot> getPharmacyEarnings() {
+    final String? uid = currentUserId;
+    if (uid == null) {
+      return const Stream.empty();
+    }
+    return _db
+        .collection('earnings')
+        .where('pharmacyId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
+  Future<void> updateOrderStatus(String orderId, String status, String userId, {String? cancellationReason}) async {
+    Map<String, dynamic> dataToUpdate = {'status': status};
+    if (cancellationReason != null) {
+      dataToUpdate['cancellationReason'] = cancellationReason;
+    }
+    await _db.collection('orders').doc(orderId).update(dataToUpdate);
+
+    if (status == 'Delivered') {
+      QuerySnapshot earningSnap = await _db.collection('earnings').where('orderId', isEqualTo: orderId).limit(1).get();
+      if (earningSnap.docs.isNotEmpty) {
+        await earningSnap.docs.first.reference.update({'status': 'Completed'});
+      }
+    }
+
+    await createNotification(
+      userId: userId,
+      title: 'Order $status',
+      body: 'Your order (#${orderId.substring(0, 6)}) has been $status.',
+      orderId: orderId,
+    );
+  }
+
+  // --- Notification Functions ---
+  Future<void> createNotification({
+    required String userId,
+    required String title,
+    required String body,
+    String? orderId,
+  }) async {
+    final notif = NotificationModel(
+      userId: userId,
+      title: title,
+      body: body,
+      createdAt: Timestamp.now(),
+      orderId: orderId,
+    );
+    await _db.collection('users').doc(userId).collection('notifications').add(notif.toMap());
+  }
+
+  Stream<List<NotificationModel>> getNotifications() {
+    final String? uid = currentUserId;
+    if (uid == null) return Stream.value([]);
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('notifications')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) =>
+        snapshot.docs.map((doc) => NotificationModel.fromMap(doc)).toList());
+  }
+
+  // --- Rating Function ---
+  Future<void> submitRating(MedicineModel medicine, double rating, String review) async {
+    final double newRating = ((medicine.rating * medicine.reviewCount) + rating) / (medicine.reviewCount + 1);
+    final int newReviewCount = medicine.reviewCount + 1;
+    await _db.collection('medicines').doc(medicine.id).update({
+      'rating': newRating,
+      'reviewCount': newReviewCount,
+    });
+    await _db.collection('medicines').doc(medicine.id).collection('reviews').add({
+      'userId': currentUserId,
+      'rating': rating,
+      'review': review,
+      'createdAt': Timestamp.now(),
+    });
+  }
+}
