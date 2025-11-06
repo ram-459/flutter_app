@@ -1,12 +1,32 @@
-import 'package:abc_app/screens/patient/medicine_detail_page.dart'; // <-- IMPORT THE DETAIL PAGE
-import 'package:abc_app/screens/patient/notifications_page.dart'; // <-- IMPORT NOTIFICATIONS
+import 'package:abc_app/screens/common/profile_page.dart';
+import 'package:abc_app/screens/patient/medicine_detail_page.dart';
+import 'package:abc_app/screens/patient/notifications_page.dart';
+import 'package:abc_app/screens/patient/pharmacy_detail_page.dart';
+import 'package:abc_app/screens/patient/pharmacy_map_page.dart';
+import 'package:abc_app/models/ad_model.dart';
+import 'package:abc_app/models/pharmacy_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:abc_app/models/user_model.dart'; // Import your model
+import 'package:abc_app/models/user_model.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:carousel_slider/carousel_slider.dart';
 
 class PatientHomePage extends StatelessWidget {
-  const PatientHomePage({super.key});
+  PatientHomePage({super.key}); // Removed 'const'
+
+  // Add Firestore instance directly
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  // Function to launch phone call
+  void _makeEmergencyCall() async {
+    const phoneNumber = 'tel:108';
+    if (await canLaunchUrl(Uri.parse(phoneNumber))) {
+      await launchUrl(Uri.parse(phoneNumber));
+    } else {
+      throw 'Could not launch $phoneNumber';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,8 +41,7 @@ class PatientHomePage extends StatelessWidget {
       slivers: [
         // 1. The Custom App Bar (StreamBuilder)
         StreamBuilder<DocumentSnapshot>(
-            stream:
-            FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
+            stream: _firestore.collection('users').doc(uid).snapshots(),
             builder: (context, snapshot) {
               UserModel? user;
               if (snapshot.hasData && snapshot.data!.exists) {
@@ -30,22 +49,29 @@ class PatientHomePage extends StatelessWidget {
                     snapshot.data!.data() as Map<String, dynamic>);
               }
 
-              // Fix for the AppBar image
               bool hasImage = (user != null && user.profileImageUrl.isNotEmpty);
 
               return SliverAppBar(
                 backgroundColor: Colors.white,
                 elevation: 1,
                 pinned: true,
-                leading: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: CircleAvatar(
-                    backgroundColor: Colors.grey[200],
-                    backgroundImage:
-                    hasImage ? NetworkImage(user!.profileImageUrl) : null,
-                    child: !hasImage
-                        ? const Icon(Icons.person, color: Colors.grey)
-                        : null,
+                leading: GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => ProfilePage()),
+                    );
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: CircleAvatar(
+                      backgroundColor: Colors.grey[200],
+                      backgroundImage:
+                      hasImage ? NetworkImage(user!.profileImageUrl) : null,
+                      child: !hasImage
+                          ? const Icon(Icons.person, color: Colors.grey)
+                          : null,
+                    ),
                   ),
                 ),
                 title: Text(
@@ -58,13 +84,12 @@ class PatientHomePage extends StatelessWidget {
                 actions: [
                   IconButton(
                     icon: const Icon(Icons.call_outlined, color: Colors.red),
-                    onPressed: () {},
+                    onPressed: _makeEmergencyCall,
                   ),
                   IconButton(
                     icon: const Icon(Icons.notifications_outlined,
                         color: Colors.grey),
                     onPressed: () {
-                      // Navigate to Notifications Page
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (context) => const NotificationsPage()),
@@ -79,37 +104,25 @@ class PatientHomePage extends StatelessWidget {
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Material(
-              color: Colors.transparent,
-              child: TextField(
-                decoration: InputDecoration(
-                  hintText: 'Search Medicines',
-                  prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: Colors.grey[100],
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12.0),
-                    borderSide: BorderSide.none,
-                  ),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'Search Medicines',
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: Colors.grey[100],
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12.0),
+                  borderSide: BorderSide.none,
                 ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
               ),
             ),
           ),
         ),
 
-        // 3. The Banner Image
+        // 3. The Banner Carousel (Ads & Offers)
         SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12.0),
-              child: Image.asset(
-                'assets/images/banner1.png', // Make sure this asset exists
-                height: 180,
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
+          child: _buildBannerCarousel(),
         ),
 
         // 4. "Quick Access" Title
@@ -123,39 +136,40 @@ class PatientHomePage extends StatelessWidget {
           ),
         ),
 
-        // 5. Quick Access Horizontal List
+        // 5. Quick Access Horizontal List (Pharmacies & Map)
         SliverToBoxAdapter(
           child: SizedBox(
             height: 200,
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('medicines')
-                  .where('isFeatured', isEqualTo: true)
+              stream: _firestore
+                  .collection('users')
+                  .where('role', isEqualTo: 'pharmacy')
                   .snapshots(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }
                 if (snapshot.data!.docs.isEmpty) {
-                  return const Center(child: Text('No featured items.'));
+                  return const Center(child: Text('No pharmacies found.'));
                 }
 
-                var docs = snapshot.data!.docs;
+                var pharmacies = snapshot.data!.docs;
+
                 return ListView.builder(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                  itemCount: docs.length,
+                  itemCount: pharmacies.length + 1, // +1 for the map card
                   itemBuilder: (context, index) {
-                    var data = docs[index].data() as Map<String, dynamic>;
-                    String medicineId = docs[index].id; // <-- Get the ID
-
-                    return _buildMedicineCard(
-                      context,
-                      data['medicineName'] ?? 'No Name',
-                      data['category'] ?? 'No Category',
-                      data['imageUrl'] ?? '',
-                      medicineId, // <-- Pass the ID
-                    );
+                    if (index == 0) {
+                      // Map Card
+                      return _buildMapCard(context);
+                    } else {
+                      // Pharmacy Cards
+                      var pharmacyDoc = pharmacies[index - 1];
+                      var pharmacyData = pharmacyDoc.data() as Map<String, dynamic>;
+                      String pharmacyId = pharmacyDoc.id;
+                      return _buildPharmacyCard(context, pharmacyData, pharmacyId);
+                    }
                   },
                 );
               },
@@ -176,7 +190,7 @@ class PatientHomePage extends StatelessWidget {
 
         // 7. Main Medicine Grid
         StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('medicines').snapshots(),
+          stream: _firestore.collection('medicines').snapshots(),
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
               return const SliverToBoxAdapter(
@@ -202,14 +216,14 @@ class PatientHomePage extends StatelessWidget {
                 delegate: SliverChildBuilderDelegate(
                       (context, index) {
                     var data = docs[index].data() as Map<String, dynamic>;
-                    String medicineId = docs[index].id; // <-- Get the ID
+                    String medicineId = docs[index].id;
 
                     return _buildMedicineCard(
                       context,
                       data['medicineName'] ?? 'No Name',
                       data['category'] ?? 'No Category',
                       data['imageUrl'] ?? '',
-                      medicineId, // <-- Pass the ID
+                      medicineId,
                     );
                   },
                   childCount: docs.length,
@@ -222,19 +236,372 @@ class PatientHomePage extends StatelessWidget {
     );
   }
 
-  //
-  // vvvv THIS IS THE UPDATED "UTIL" WIDGET vvvv
-  //
-  // Reusable widget for the medicine cards
+  // Map Card Widget
+  Widget _buildMapCard(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PharmacyMapPage(
+              pharmacy: PharmacyModel(
+                id: 'temp',
+                name: 'Select Location',
+                description: 'Choose your location on the map',
+                address: '',
+                contactNumber: '',
+                email: '',
+                latitude: 0.0,  // Default coordinates
+                longitude: 0.0, // Default coordinates
+                profileImageUrl: '',
+              ),
+              allowLocationSelection: true,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        width: 160,
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        child: Card(
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.map, size: 50, color: Colors.blue),
+              const SizedBox(height: 12),
+              const Text(
+                'View Map',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Select your location',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Pharmacy Card Widget
+  Widget _buildPharmacyCard(BuildContext context, Map<String, dynamic> pharmacyData, String pharmacyId) {
+    String pharmacyName = pharmacyData['pharmacyName'] ?? pharmacyData['name'] ?? 'Pharmacy';
+    String profileImageUrl = pharmacyData['profileImageUrl'] ?? '';
+    bool hasImage = profileImageUrl.isNotEmpty;
+    bool isOpen = pharmacyData['isOpen'] ?? true;
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PharmacyDetailPage(pharmacyId: pharmacyId),
+          ),
+        );
+      },
+      child: Container(
+        width: 160,
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        child: Card(
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Column(
+            children: [
+              // Pharmacy Image
+              Container(
+                height: 100,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                  image: hasImage
+                      ? DecorationImage(
+                    image: NetworkImage(profileImageUrl),
+                    fit: BoxFit.cover,
+                  )
+                      : null,
+                  color: Colors.grey[100],
+                ),
+                child: !hasImage
+                    ? const Icon(Icons.local_pharmacy, size: 40, color: Colors.grey)
+                    : null,
+              ),
+              // Pharmacy Info
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      pharmacyName,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.star, color: Colors.amber, size: 16),
+                        const SizedBox(width: 4),
+                        Text(
+                          '4.5',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.circle,
+                          color: isOpen ? Colors.green : Colors.red,
+                          size: 12,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          isOpen ? 'Open' : 'Closed',
+                          style: TextStyle(
+                            color: isOpen ? Colors.green : Colors.red,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Banner Carousel
+  Widget _buildBannerCarousel() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore
+          .collection('ads')
+          .where('isActive', isEqualTo: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Container(
+            height: 180,
+            margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: _buildDefaultBannerContent(),
+          );
+        }
+
+        if (snapshot.hasError) {
+          debugPrint('Error loading ads: ${snapshot.error}');
+          return _buildDefaultBanner();
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return _buildDefaultBanner();
+        }
+
+        var ads = snapshot.data!.docs;
+
+        List<DocumentSnapshot> activeAds = ads.where((doc) {
+          try {
+            var data = doc.data() as Map<String, dynamic>;
+            if (data['startDate'] == null || data['endDate'] == null) {
+              return false;
+            }
+            Timestamp start = data['startDate'];
+            Timestamp end = data['endDate'];
+            DateTime now = DateTime.now();
+            return now.isAfter(start.toDate()) && now.isBefore(end.toDate());
+          } catch (e) {
+            debugPrint('Error processing ad date: $e');
+            return false;
+          }
+        }).toList();
+
+        if (activeAds.isEmpty) {
+          return _buildDefaultBanner();
+        }
+
+        List<DocumentSnapshot> displayAds = activeAds.take(5).toList();
+
+        return Container(
+          height: 180,
+          margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: CarouselSlider.builder(
+            itemCount: displayAds.length,
+            options: CarouselOptions(
+              autoPlay: true,
+              autoPlayInterval: const Duration(seconds: 5),
+              autoPlayAnimationDuration: const Duration(milliseconds: 800),
+              autoPlayCurve: Curves.fastOutSlowIn,
+              enlargeCenterPage: true,
+              viewportFraction: 0.9,
+              aspectRatio: 2.0,
+            ),
+            itemBuilder: (context, index, realIndex) {
+              try {
+                var ad = AdModel.fromSnapshot(displayAds[index]);
+                return _buildAdBanner(ad);
+              } catch (e) {
+                debugPrint('Error building ad banner: $e');
+                return _buildDefaultBannerContent();
+              }
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAdBanner(AdModel ad) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4.0),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.3),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12.0),
+        child: Stack(
+          children: [
+            Image.network(
+              ad.imageUrl,
+              fit: BoxFit.cover,
+              width: double.infinity,
+              height: double.infinity,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Container(
+                  color: Colors.grey[200],
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded /
+                          loadingProgress.expectedTotalBytes!
+                          : null,
+                    ),
+                  ),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return _buildDefaultBannerContent();
+              },
+            ),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.6),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              left: 12,
+              bottom: 12,
+              right: 12,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (ad.title.isNotEmpty)
+                    Text(
+                      ad.title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  if (ad.description.isNotEmpty)
+                    Text(
+                      ad.description,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDefaultBanner() {
+    return Container(
+      height: 180,
+      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: _buildDefaultBannerContent(),
+    );
+  }
+
+  Widget _buildDefaultBannerContent() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12.0),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.blue[800]!, Colors.blue[600]!],
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.local_pharmacy, color: Colors.white, size: 50),
+            SizedBox(height: 8),
+            Text(
+              'ABC Pharmacy',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 4),
+            Text(
+              'Your Health, Our Priority',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Medicine Card Widget
   Widget _buildMedicineCard(
-      BuildContext context, String name, String category, String imageUrl, String medicineId) { // <-- Added medicineId
+      BuildContext context, String name, String category, String imageUrl, String medicineId) {
 
     bool hasImage = imageUrl.isNotEmpty;
 
-    // Wrap the Card in a GestureDetector to make it clickable
     return GestureDetector(
       onTap: () {
-        // Navigate to the MedicineDetailPage and pass the ID
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -273,7 +640,7 @@ class PatientHomePage extends StatelessWidget {
                     errorBuilder: (context, error, stackTrace) =>
                     const Icon(Icons.error, color: Colors.red),
                   )
-                      : Icon( // Placeholder if no image
+                      : Icon(
                     Icons.medication_liquid,
                     color: Colors.grey[300],
                     size: 50,
