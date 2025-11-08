@@ -1,0 +1,72 @@
+[
+  {
+    "name": "Aspirin",
+    "description": "Aspirin 75 mg oral tablet",
+    "category": "Pain Relief"
+  },
+  {
+    "name": "Acetaminophen",
+    "description": "Acetaminophen 500 mg oral tablet",
+    "category": "Pain Relief"
+  },
+  {
+    "name": "Ibuprofen",
+    "description": "Ibuprofen 800 mg prolonged-release oral tablet",
+    "category": "Anti-inflammatory"
+  },
+  {
+    "name": "Cefadroxil",
+    "description": "Cefadroxil 1 g oral tablet",
+    "category": "Antibiotic"
+  },
+  {
+    "name": "Naproxen",
+    "description": "Naproxen 250 mg gastro-resistant oral tablet",
+    "category": "Anti-inflammatory"
+  },
+  {
+    "name": "Zinc",
+    "description": "Zinc 50 mg oral capsule",
+    "category": "Supplement"
+  },
+  {
+    "name": "Melatonin",
+    "description": "Melatonin 2 mg prolonged-release oral tablet",
+    "category": "Supplement"
+  },
+  {
+    "name": "Diazepam",
+    "description": "Diazepam 1 mg/mL oral solution",
+    "category": "Anxiety"
+  },
+  {
+    "name": "Linezolid",
+    "description": "Linezolid 2 mg/mL solution for infusion",
+    "category": "Antibiotic"
+  },
+  {
+    "name": "Metronidazole",
+    "description": "Metronidazole 5 mg/mL solution for infusion",
+    "category": "Antibiotic"
+  },
+  {
+    "name": "Clotrimazole",
+    "description": "Clotrimazole 10 mg/g cutaneous powder",
+    "category": "Antifungal"
+  },
+  {
+    "name": "Pregabalin",
+    "description": "Pregabalin 200 mg oral capsule",
+    "category": "Nerve Pain"
+  },
+  {
+    "name": "Rifaximin",
+    "description": "Rifaximin 550 mg oral tablet",
+    "category": "Antibiotic"
+  },
+  {
+    "name": "Acyclovir",
+    "description": "Acyclovir 50 mg/g cutaneous cream",
+    "category": "Antiviral"
+  }
+]
