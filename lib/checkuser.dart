@@ -1,6 +1,7 @@
+// checkuser.dart
 import 'package:abc_app/loginpage.dart';
-import 'package:abc_app/screens/patient/patient_homepage.dart';
-import 'package:abc_app/screens/pharmacy/pharmacy_homepage.dart';
+import 'package:abc_app/screens/splash_screen.dart';
+
 import 'package:abc_app/widgets/bottom_navbar.dart';
 import 'package:abc_app/widgets/pharmacy_bottom_navbar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -29,7 +30,7 @@ class _CheckuserState extends State<Checkuser> {
         }
       } catch (e) {
         print("Error fetching user role: $e");
-        return null; // On error, send to login
+        return null; // On error, treat as logged out
       }
     }
     return null; // No user logged in
@@ -55,12 +56,14 @@ class _CheckuserState extends State<Checkuser> {
           if (role == 'pharmacy') {
             return const PharmacyBottomNavbar();
           } else {
+            // Default to patient dashboard
             return const BottomNavbar();
           }
         }
 
-        // If no data (snapshot.data is null), send to login page
-        return const Loginpage();
+        // ***** THIS IS THE FIX *****
+        // If no data (snapshot.data is null), send to SplashScreen
+        return const SplashScreen();
       },
     );
   }
