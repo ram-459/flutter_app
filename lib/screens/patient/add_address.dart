@@ -48,7 +48,7 @@ class _AddAddressPageState extends State<AddAddressPage> {
           stateRegion: _stateController.text.trim(),
           postalCode: _postalCodeController.text.trim(),
           country: _countryController.text.trim(),
-          isDefault: false, // New addresses are not default
+          isDefault: false, id: '', userId: '', // New addresses are not default
         );
 
         await _firestoreService.addAddress(newAddress);

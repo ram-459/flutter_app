@@ -1,3 +1,4 @@
+// screens/patient/my_orders_page.dart
 import 'package:abc_app/models/order_model.dart';
 import 'package:abc_app/services/firestore_service.dart';
 import 'package:flutter/material.dart';
@@ -47,14 +48,24 @@ class MyOrdersPage extends StatelessWidget {
                   return const Center(child: CircularProgressIndicator());
                 }
                 if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
+                  // This is where the index error is thrown
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(
+                        'Error: ${snapshot.error}\n\n'
+                            'This likely means you need to create a Firestore index. '
+                            'Please check your Firebase console.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  );
                 }
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return const Center(child: Text('You have no orders.'));
                 }
 
                 final orders = snapshot.data!;
-
                 return ListView.builder(
                   itemCount: orders.length,
                   itemBuilder: (context, index) {

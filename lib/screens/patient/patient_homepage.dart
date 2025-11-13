@@ -2,7 +2,7 @@ import 'package:abc_app/screens/common/profile_page.dart';
 import 'package:abc_app/screens/patient/medicine_detail_page.dart';
 import 'package:abc_app/screens/patient/notifications_page.dart';
 import 'package:abc_app/screens/patient/pharmacy_detail_page.dart';
-import 'package:abc_app/screens/patient/pharmacy_map_page.dart';
+import 'package:abc_app/screens/map/map_page.dart';
 import 'package:abc_app/models/ad_model.dart';
 import 'package:abc_app/models/pharmacy_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,11 +12,17 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 
-class PatientHomePage extends StatelessWidget {
-  PatientHomePage({super.key}); // Removed 'const'
+class PatientHomePage extends StatefulWidget {
+  const PatientHomePage({super.key});
 
+  @override
+  State<PatientHomePage> createState() => _PatientHomePageState();
+}
+
+class _PatientHomePageState extends State<PatientHomePage> {
   // Add Firestore instance directly
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final TextEditingController _searchController = TextEditingController();
 
   // Function to launch phone call
   void _makeEmergencyCall() async {
@@ -29,18 +35,26 @@ class PatientHomePage extends StatelessWidget {
   }
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final String? uid = FirebaseAuth.instance.currentUser?.uid;
 
     if (uid == null) {
       return const Scaffold(
-          body: Center(child: Text("Error: Not logged in.")));
+        body: Center(child: Text("Error: Not logged in.")),
+      );
     }
 
-    return CustomScrollView(
-      slivers: [
-        // 1. The Custom App Bar (StreamBuilder)
-        StreamBuilder<DocumentSnapshot>(
+    return Scaffold(
+      body: CustomScrollView(
+        slivers: [
+          // 1. The Custom App Bar (StreamBuilder)
+          StreamBuilder<DocumentSnapshot>(
             stream: _firestore.collection('users').doc(uid).snapshots(),
             builder: (context, snapshot) {
               UserModel? user;
@@ -98,141 +112,179 @@ class PatientHomePage extends StatelessWidget {
                   ),
                 ],
               );
-            }),
+            },
+          ),
 
-        // 2. The Search Bar
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: 'Search Medicines',
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: Colors.grey[100],
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12.0),
-                  borderSide: BorderSide.none,
+          // 2. The Search Bar
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Material(
+                elevation: 2,
+                borderRadius: BorderRadius.circular(12),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search Medicines',
+                    prefixIcon: const Icon(Icons.search),
+                    filled: true,
+                    fillColor: Colors.grey[100],
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12.0),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  ),
                 ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
               ),
             ),
           ),
-        ),
 
-        // 3. The Banner Carousel (Ads & Offers)
-        SliverToBoxAdapter(
-          child: _buildBannerCarousel(),
-        ),
+          // 3. The Banner Carousel (Ads & Offers)
+          SliverToBoxAdapter(
+            child: _buildBannerCarousel(),
+          ),
 
-        // 4. "Quick Access" Title
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16.0, 24.0, 16.0, 8.0),
-            child: Text(
-              'Quick Access',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          // 4. "Quick Access" Title
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16.0, 24.0, 16.0, 8.0),
+              child: Text(
+                'Quick Access',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.grey[800]),
+              ),
             ),
           ),
-        ),
 
-        // 5. Quick Access Horizontal List (Pharmacies & Map)
-        SliverToBoxAdapter(
-          child: SizedBox(
-            height: 200,
-            child: StreamBuilder<QuerySnapshot>(
-              stream: _firestore
-                  .collection('users')
-                  .where('role', isEqualTo: 'pharmacy')
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.data!.docs.isEmpty) {
-                  return const Center(child: Text('No pharmacies found.'));
-                }
+          // 5. Quick Access Horizontal List (Pharmacies & Map)
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 200,
+              child: StreamBuilder<QuerySnapshot>(
+                stream: _firestore
+                    .collection('users')
+                    .where('role', isEqualTo: 'pharmacy')
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
 
-                var pharmacies = snapshot.data!.docs;
-
-                return ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                  itemCount: pharmacies.length + 1, // +1 for the map card
-                  itemBuilder: (context, index) {
-                    if (index == 0) {
-                      // Map Card
-                      return _buildMapCard(context);
-                    } else {
-                      // Pharmacy Cards
-                      var pharmacyDoc = pharmacies[index - 1];
-                      var pharmacyData = pharmacyDoc.data() as Map<String, dynamic>;
-                      String pharmacyId = pharmacyDoc.id;
-                      return _buildPharmacyCard(context, pharmacyData, pharmacyId);
-                    }
-                  },
-                );
-              },
-            ),
-          ),
-        ),
-
-        // 6. "All Medicines" Title
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16.0, 24.0, 16.0, 8.0),
-            child: Text(
-              'All Medicines',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ),
-
-        // 7. Main Medicine Grid
-        StreamBuilder<QuerySnapshot>(
-          stream: _firestore.collection('medicines').snapshots(),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              return const SliverToBoxAdapter(
-                child: Center(child: CircularProgressIndicator()),
-              );
-            }
-            if (snapshot.data!.docs.isEmpty) {
-              return const SliverToBoxAdapter(
-                child: Center(child: Text('No medicines found.')),
-              );
-            }
-
-            var docs = snapshot.data!.docs;
-            return SliverPadding(
-              padding: const EdgeInsets.all(12.0),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 12.0,
-                  crossAxisSpacing: 12.0,
-                  childAspectRatio: 0.75,
-                ),
-                delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                    var data = docs[index].data() as Map<String, dynamic>;
-                    String medicineId = docs[index].id;
-
-                    return _buildMedicineCard(
-                      context,
-                      data['medicineName'] ?? 'No Name',
-                      data['category'] ?? 'No Category',
-                      data['imageUrl'] ?? '',
-                      medicineId,
+                  if (snapshot.hasError) {
+                    debugPrint('Error loading pharmacies: ${snapshot.error}');
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.error_outline, color: Colors.red[300], size: 40),
+                          const SizedBox(height: 8),
+                          const Text('Error loading pharmacies'),
+                        ],
+                      ),
                     );
-                  },
-                  childCount: docs.length,
-                ),
+                  }
+
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return const Center(child: Text('No pharmacies found.'));
+                  }
+
+                  var pharmacies = snapshot.data!.docs;
+
+                  return ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                    itemCount: pharmacies.length + 1, // +1 for the map card
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        // Map Card
+                        return _buildMapCard(context);
+                      } else {
+                        // Pharmacy Cards
+                        var pharmacyDoc = pharmacies[index - 1];
+                        var pharmacyData = pharmacyDoc.data() as Map<String, dynamic>;
+                        String pharmacyId = pharmacyDoc.id;
+                        return _buildPharmacyCard(context, pharmacyData, pharmacyId);
+                      }
+                    },
+                  );
+                },
               ),
-            );
-          },
-        ),
-      ],
+            ),
+          ),
+
+          // 6. "All Medicines" Title
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16.0, 24.0, 16.0, 8.0),
+              child: Text(
+                'All Medicines',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.grey[800]),
+              ),
+            ),
+          ),
+
+          // 7. Main Medicine Grid
+          StreamBuilder<QuerySnapshot>(
+            stream: _firestore.collection('medicines').snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const SliverToBoxAdapter(
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+
+              if (snapshot.hasError) {
+                debugPrint('Error loading medicines: ${snapshot.error}');
+                return SliverToBoxAdapter(
+                  child: Center(
+                    child: Column(
+                      children: [
+                        Icon(Icons.error_outline, color: Colors.red[300], size: 50),
+                        const SizedBox(height: 8),
+                        const Text('Error loading medicines'),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return const SliverToBoxAdapter(
+                  child: Center(child: Text('No medicines found.')),
+                );
+              }
+
+              var docs = snapshot.data!.docs;
+              return SliverPadding(
+                padding: const EdgeInsets.all(12.0),
+                sliver: SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12.0,
+                    crossAxisSpacing: 12.0,
+                    childAspectRatio: 0.75,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                      var data = docs[index].data() as Map<String, dynamic>;
+                      String medicineId = docs[index].id;
+
+                      return _buildMedicineCard(
+                        context,
+                        data['medicineName'] ?? 'No Name',
+                        data['category'] ?? 'No Category',
+                        data['imageUrl'] ?? '',
+                        medicineId,
+                      );
+                    },
+                    childCount: docs.length,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -243,20 +295,7 @@ class PatientHomePage extends StatelessWidget {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => PharmacyMapPage(
-              pharmacy: PharmacyModel(
-                id: 'temp',
-                name: 'Select Location',
-                description: 'Choose your location on the map',
-                address: '',
-                contactNumber: '',
-                email: '',
-                latitude: 0.0,  // Default coordinates
-                longitude: 0.0, // Default coordinates
-                profileImageUrl: '',
-              ),
-              allowLocationSelection: true,
-            ),
+            builder: (context) => const MapPage(),
           ),
         );
       },
@@ -269,7 +308,7 @@ class PatientHomePage extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.map, size: 50, color: Colors.blue),
+              Icon(Icons.map, size: 50, color: Colors.blue[700]),
               const SizedBox(height: 12),
               const Text(
                 'View Map',
@@ -277,7 +316,7 @@ class PatientHomePage extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Select your location',
+                'Find pharmacies near you',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
@@ -345,9 +384,9 @@ class PatientHomePage extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Icon(Icons.star, color: Colors.amber, size: 16),
+                        Icon(Icons.star, color: Colors.amber[600], size: 16),
                         const SizedBox(width: 4),
-                        Text(
+                        const Text(
                           '4.5',
                           style: const TextStyle(fontSize: 12),
                         ),
@@ -570,9 +609,9 @@ class PatientHomePage extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.local_pharmacy, color: Colors.white, size: 50),
-            SizedBox(height: 8),
-            Text(
+            const Icon(Icons.local_pharmacy, color: Colors.white, size: 50),
+            const SizedBox(height: 8),
+            const Text(
               'ABC Pharmacy',
               style: TextStyle(
                 color: Colors.white,
@@ -580,8 +619,8 @@ class PatientHomePage extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            SizedBox(height: 4),
-            Text(
+            const SizedBox(height: 4),
+            const Text(
               'Your Health, Our Priority',
               style: TextStyle(
                 color: Colors.white,
@@ -596,8 +635,12 @@ class PatientHomePage extends StatelessWidget {
 
   // Medicine Card Widget
   Widget _buildMedicineCard(
-      BuildContext context, String name, String category, String imageUrl, String medicineId) {
-
+      BuildContext context,
+      String name,
+      String category,
+      String imageUrl,
+      String medicineId,
+      ) {
     bool hasImage = imageUrl.isNotEmpty;
 
     return GestureDetector(
@@ -610,11 +653,10 @@ class PatientHomePage extends StatelessWidget {
         );
       },
       child: Card(
-        elevation: 0,
+        elevation: 2,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12.0),
         ),
-        color: Colors.white,
         child: Container(
           padding: const EdgeInsets.all(12.0),
           child: Column(

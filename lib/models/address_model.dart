@@ -1,8 +1,9 @@
+// In models/address_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AddressModel {
-  final String? id; // Document ID
-  final String title; // e.g., "Home", "Office"
+  final String id;
+  final String title;
   final String addressLine1;
   final String addressLine2;
   final String city;
@@ -10,39 +11,36 @@ class AddressModel {
   final String postalCode;
   final String country;
   final bool isDefault;
-  final String userId; // Add this field
+  final String userId;
 
   AddressModel({
-    this.id,
+    required this.id,
     required this.title,
     required this.addressLine1,
-    this.addressLine2 = '',
+    required this.addressLine2,
     required this.city,
     required this.stateRegion,
     required this.postalCode,
     required this.country,
-    this.isDefault = false,
-    required this.userId, // Add this
+    required this.isDefault,
+    required this.userId,
   });
 
-  // From Firestore DocumentSnapshot (for addresses collection)
-  factory AddressModel.fromSnapshot(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-    return AddressModel(
-      id: doc.id,
-      title: data['title'] ?? '',
-      addressLine1: data['addressLine1'] ?? '',
-      addressLine2: data['addressLine2'] ?? '',
-      city: data['city'] ?? '',
-      stateRegion: data['stateRegion'] ?? '',
-      postalCode: data['postalCode'] ?? '',
-      country: data['country'] ?? '',
-      isDefault: data['isDefault'] ?? false,
-      userId: data['userId'] ?? '', // Add this
-    );
+  Map<String, dynamic> toMap() {
+    return {
+      'title': title,
+      'addressLine1': addressLine1,
+      'addressLine2': addressLine2,
+      'city': city,
+      'stateRegion': stateRegion,
+      'postalCode': postalCode,
+      'country': country,
+      'isDefault': isDefault,
+      'userId': userId,
+    };
   }
 
-  // From Map<String, dynamic> (for embedded objects like in orders)
+  // Add this fromMap method
   factory AddressModel.fromMap(Map<String, dynamic> data) {
     return AddressModel(
       id: data['id'] ?? '',
@@ -54,39 +52,40 @@ class AddressModel {
       postalCode: data['postalCode'] ?? '',
       country: data['country'] ?? '',
       isDefault: data['isDefault'] ?? false,
-      userId: data['userId'] ?? '', // Add this
+      userId: data['userId'] ?? '',
     );
   }
 
-  // To Firestore document
-  Map<String, dynamic> toMap() {
-    return {
-      'title': title,
-      'addressLine1': addressLine1,
-      'addressLine2': addressLine2,
-      'city': city,
-      'stateRegion': stateRegion,
-      'postalCode': postalCode,
-      'country': country,
-      'isDefault': isDefault,
-      'userId': userId, // Add this
-      // Note: We don't include 'id' here as it's the document ID
-    };
-  }
+  // Keep your existing fromSnapshot method
+  factory AddressModel.fromSnapshot(
 
-  // For embedding in orders - include the ID
-  Map<String, dynamic> toOrderMap() {
-    return {
-      'id': id ?? '', // Include ID when embedding in orders
-      'title': title,
-      'addressLine1': addressLine1,
-      'addressLine2': addressLine2,
-      'city': city,
-      'stateRegion': stateRegion,
-      'postalCode': postalCode,
-      'country': country,
-      'isDefault': isDefault,
-      'userId': userId,
-    };
+      DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return AddressModel(
+      id: doc.id,
+      title: data['title'] ?? '',
+      addressLine1: data['addressLine1'] ?? '',
+      addressLine2: data['addressLine2'] ?? '',
+      city: data['city'] ?? '',
+      stateRegion: data['stateRegion'] ?? '',
+      postalCode: data['postalCode'] ?? '',
+      country: data['country'] ?? '',
+      isDefault: data['isDefault'] ?? false,
+      userId: data['userId'] ?? '',
+    );
+  }
+  static AddressModel empty() {
+    return AddressModel(
+      id: '',
+      title: '',
+      addressLine1: '',
+      addressLine2: '',
+      city: '',
+      stateRegion: '',
+      postalCode: '',
+      country: '',
+      isDefault: false,
+      userId: '',
+    );
   }
 }

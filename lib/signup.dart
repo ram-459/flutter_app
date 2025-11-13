@@ -69,7 +69,7 @@ class _SignupState extends State<Signup> {
         // ignore: use_build_context_synchronously
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const PatientHomePage()),
+          MaterialPageRoute(builder: (context) =>  PatientHomePage()),
         );
       }
     } on FirebaseAuthException catch (ex) {
@@ -109,7 +109,7 @@ class _SignupState extends State<Signup> {
         // ignore: use_build_context_synchronously
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const PatientHomePage()),
+          MaterialPageRoute(builder: (context) =>  PatientHomePage()),
         );
       } else {
         Uihelper.CustomAlertBox(context, "Google Sign-In was cancelled");
@@ -141,14 +141,14 @@ class _SignupState extends State<Signup> {
               ),
             ),
           ),
-          Positioned(
-            top: 40.0,
-            left: 10.0,
-            child: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-          ),
+          // Positioned(
+          //   top: 40.0,
+          //   left: 10.0,
+          //   child: IconButton(
+          //     icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30),
+          //     onPressed: () => Navigator.of(context).pop(),
+          //   ),
+          // ),
           Center(
             child: SingleChildScrollView(
               child: Padding(
@@ -326,29 +326,36 @@ class _SignupState extends State<Signup> {
                     ),
 
                     // Login Link
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        const Text("already have an account ? ",
-                            style: TextStyle(fontSize: 15)),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (context) => const Loginpage()));
-                          },
-                          child: const Text(
-                            "sign in",
-                            style: TextStyle(
-                              color: Color(0xFF1E88E5), // Blue
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        )
-                      ],
-                    ),
+    // Responsive "Already have an account? sign in"
+    Row(
+    mainAxisAlignment: MainAxisAlignment.end,
+    children: [
+    const Flexible(
+    child: Text(
+    "already have an account ? ",
+    style: TextStyle(fontSize: 15),
+    overflow: TextOverflow.ellipsis,
+    maxLines: 1,
+    ),
+    ),
+    TextButton(
+    onPressed: () {
+    Navigator.push(
+    context,
+    MaterialPageRoute(builder: (context) => const Loginpage()),
+    );
+    },
+    child: const Text(
+    "sign in",
+    style: TextStyle(
+    color: Color(0xFF1E88E5),
+    fontSize: 16,
+    fontWeight: FontWeight.bold,
+    ),
+    ),
+    ),
+    ],
+    ),
                   ],
                 ),
               ),

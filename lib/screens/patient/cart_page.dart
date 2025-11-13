@@ -1,4 +1,4 @@
-import 'package:abc_app/models/cart_model.dart';
+import 'package:abc_app/models/cart_item_model.dart';
 import 'package:abc_app/services/firestore_service.dart';
 import 'package:flutter/material.dart';
 import 'checkout_page.dart';

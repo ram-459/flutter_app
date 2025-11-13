@@ -1,5 +1,9 @@
+import 'package:abc_app/forgetpassword.dart';
 import 'package:abc_app/models/user_model.dart';
+import 'package:abc_app/screens/patient/pharmacy_location_page.dart';
+import 'package:abc_app/screens/pharmacy/add_pharmacy_address_page.dart';
 import 'package:abc_app/screens/pharmacy/earnings_page.dart';
+import 'package:abc_app/screens/settings_screen.dart';
 import 'package:abc_app/services/firestore_service.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart'; // <-- IMPORT FIREBASE AUTH
@@ -21,10 +25,10 @@ class PharmacyProfilePage extends StatelessWidget {
         title: const Text('Profile'),
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
+        // leading: IconButton(
+        //   icon: const Icon(Icons.arrow_back),
+        //   onPressed: () => Navigator.pop(context),
+        // ),
       ),
       body: StreamBuilder<UserModel>(
         stream: firestoreService.getCurrentUserStream(),
@@ -98,7 +102,7 @@ class PharmacyProfilePage extends StatelessWidget {
                     Icons.arrow_forward_ios,
                         () {
                       // Navigate to Change Password Page
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const PlaceholderPage(title: 'Change Password')));
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => Forgetpassword()));
                     },
                   ),
                   _buildProfileOption(
@@ -116,7 +120,7 @@ class PharmacyProfilePage extends StatelessWidget {
                     Icons.arrow_forward_ios,
                         () {
                       // Navigate to Settings Page
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const PlaceholderPage(title: 'Settings')));
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => SettingsScreen()));
                     },
                   ),
                   _buildProfileOption(
@@ -125,7 +129,7 @@ class PharmacyProfilePage extends StatelessWidget {
                     Icons.arrow_forward_ios,
                         () {
                       // Navigate to Location Page
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const PlaceholderPage(title: 'Location')));
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => AddPharmacyAddressPage()));
                     },
                   ),
                   const SizedBox(height: 48),

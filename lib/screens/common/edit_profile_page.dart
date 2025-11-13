@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'package:abc_app/models/user_model.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:abc_app/services/firestore_service.dart'; // ADDED import
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+// REMOVED: cloud_firestore.dart and firebase_storage.dart (now handled by service)
 
 class EditProfilePage extends StatefulWidget {
   final UserModel user;
@@ -14,12 +14,16 @@ class EditProfilePage extends StatefulWidget {
 }
 
 class _EditProfilePageState extends State<EditProfilePage> {
-  // Updated controllers to match new UI
+  // --- Controllers ---
   late TextEditingController _nameController;
   late TextEditingController _emailController;
   late TextEditingController _phoneController;
 
-  File? _imageFile; // Holds the new image picked from the gallery
+  // --- Service ---
+  final FirestoreService _firestoreService = FirestoreService(); // ADDED service instance
+
+  // --- State ---
+  File? _imageFile;
   final ImagePicker _picker = ImagePicker();
   bool _isLoading = false;
 
@@ -39,7 +43,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     super.dispose();
   }
 
-  // Function to pick an image
+  // Function to pick an image (Unchanged)
   Future<void> _pickImage() async {
     final XFile? pickedFile =
     await _picker.pickImage(source: ImageSource.gallery);
@@ -50,45 +54,33 @@ class _EditProfilePageState extends State<EditProfilePage> {
     }
   }
 
-  // Function to upload the image and save data
+  // --- MODIFIED: _saveProfile function ---
+  // This now uses your FirestoreService to match the pharmacy edit page.
   Future<void> _saveProfile() async {
     if (_isLoading) return;
     setState(() => _isLoading = true);
 
-    String newImageUrl = widget.user.profileImageUrl; // Start with the old URL
-
     try {
-      // 1. If a new image was picked, upload it
+      String? newImageUrl;
+
+      // 1. If a new image was picked, upload it using the service
       if (_imageFile != null) {
-        // Create a reference in Firebase Storage
-        Reference storageRef = FirebaseStorage.instance
-            .ref()
-            .child('profile_images')
-            .child('${widget.user.uid}.jpg');
-
-        // Upload the file
-        UploadTask uploadTask = storageRef.putFile(_imageFile!);
-
-        // Get the download URL
-        TaskSnapshot snapshot = await uploadTask;
-        newImageUrl = await snapshot.ref.getDownloadURL();
+        newImageUrl = await _firestoreService.uploadProfileImage(_imageFile!);
       }
 
-      // 2. Create the updated data map
-      Map<String, dynamic> updatedData = {
-        'name': _nameController.text.trim(),
-        'phoneNumber': _phoneController.text.trim(), // <-- SAVES THE NUMBER AS TEXT
-        'profileImageUrl': newImageUrl,
-        // We DO NOT update the email here.
-      };
+      // 2. Create the updated UserModel
+      // We use .copyWith() to create a new model with the changes
+      UserModel updatedUser = widget.user.copyWith(
+        name: _nameController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+        profileImageUrl: newImageUrl ?? widget.user.profileImageUrl, // Use new URL or keep old one
+        // Email is not updated here as it's read-only
+      );
 
-      // 3. Update the user document in Firestore
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.user.uid)
-          .update(updatedData);
+      // 3. Update the user document in Firestore via the service
+      await _firestoreService.updateUser(updatedUser);
 
-      // 4. If successful, show snackbar and pop
+      // 4. If successful, show snackbar and pop (Unchanged)
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Profile updated successfully!')),
@@ -111,13 +103,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    // Determine which image to show in the preview
+    // This build logic is from your original EditProfilePage (Unchanged)
     ImageProvider currentImage;
     if (_imageFile != null) {
       currentImage = FileImage(_imageFile!);
     } else if (widget.user.profileImageUrl.isNotEmpty) {
       currentImage = NetworkImage(widget.user.profileImageUrl);
     } else {
+      // Assuming you have a default avatar image
       currentImage = const AssetImage('assets/images/user_avatar.png');
     }
 
@@ -138,6 +131,13 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 CircleAvatar(
                   radius: 60,
                   backgroundImage: currentImage,
+                  onBackgroundImageError: (exception, stackTrace) {
+                    // Handle broken image links
+                    print("Error loading network image: $exception");
+                    setState(() {
+                      currentImage = const AssetImage('assets/images/user_avatar.png');
+                    });
+                  },
                 ),
                 Positioned(
                   bottom: 0,
@@ -206,7 +206,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     );
   }
 
-  // Helper widget for a consistent text field style
+  // Helper widget for a consistent text field style (Unchanged)
   Widget _buildTextField(
       {required TextEditingController controller,
         required String labelText,
@@ -221,7 +221,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         labelText: labelText,
         helperText: helperText,
         filled: true,
-        fillColor: Colors.grey[100],
+        fillColor: readOnly ? Colors.grey[200] : Colors.grey[100],
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,

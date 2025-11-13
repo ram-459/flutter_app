@@ -16,7 +16,7 @@ class _BottomNavbarState extends State<BottomNavbar> {
 
   // The pages that the bottom bar will switch between
   static final List<Widget> _pages = <Widget>[
-    const PatientHomePage(), // Your new home page (code in next step)
+    PatientHomePage(), // Your new home page (code in next step)
     const StorePage(),       // Placeholder page
     const CartPage(),        // Placeholder page
     ProfilePage(),     // Placeholder page

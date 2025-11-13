@@ -1,7 +1,9 @@
 import 'package:abc_app/models/medicine_model.dart';
 import 'package:abc_app/models/user_model.dart';
 import 'package:abc_app/screens/pharmacy/add_medicine_page.dart';
+import 'package:abc_app/screens/pharmacy/pharmacy_profile_page.dart';
 import 'package:abc_app/screens/pharmacy/update_medicine_page.dart';
+import 'package:abc_app/screens/settings_screen.dart';
 import 'package:abc_app/services/firestore_service.dart';
 import 'package:flutter/material.dart';
 
@@ -81,7 +83,7 @@ class _PharmacyHomepageState extends State<PharmacyHomepage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                        builder: (context) =>  ProfilePage()),
+                        builder: (context) =>  PharmacyProfilePage()),
                   );
                 },
                 child: leadingAvatar,
@@ -90,7 +92,9 @@ class _PharmacyHomepageState extends State<PharmacyHomepage> {
             actions: [
               IconButton(
                 icon: const Icon(Icons.settings_outlined, color: Colors.black),
-                onPressed: () {},
+                onPressed: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (context)=>SettingsScreen()));
+                },
               ),
             ],
           ),
