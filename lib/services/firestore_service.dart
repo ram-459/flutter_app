@@ -11,6 +11,7 @@ import 'package:cloudinary_public/cloudinary_public.dart';
 
 import '../models/ad_model.dart';
 import '../models/payment_model.dart';
+import '../models/pharmacy_model.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -82,21 +83,56 @@ class FirestoreService {
   }
 
   // --- Pharmacy Functions ---
-  Stream<List<UserModel>> getPharmacies() {
-    return _db
-        .collection('users')
-        .where('role', isEqualTo: 'pharmacy')
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-        .map((doc) => UserModel.fromMap(doc.data() as Map<String, dynamic>))
-        .toList());
+
+  // ADDED: Stream version of getPharmacyById for live updates in detail page
+  Stream<PharmacyModel?> getPharmacyStreamById(String pharmacyId) {
+    return _db.collection('users').doc(pharmacyId).snapshots().map((doc) {
+      if (doc.exists && doc.data() != null) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        return PharmacyModel(
+          id: doc.id,
+          name: data['pharmacyName'] ?? data['name'] ?? 'Unknown Pharmacy',
+          description: data['bio'] ?? '',
+          address: data['pharmacyAddress'] ?? data['location'] ?? '',
+          contactNumber: data['pharmacyContact'] ?? data['phoneNumber'] ?? '',
+          email: data['email'] ?? '',
+          latitude: (data['latitude'] ?? 0.0).toDouble(),
+          longitude: (data['longitude'] ?? 0.0).toDouble(),
+          profileImageUrl: data['profileImageUrl'] ?? '',
+          rating: (data['rating'] ?? 0.0).toDouble(),
+          reviewCount: (data['reviewCount'] ?? 0).toInt(),
+          isOpen: data['isOpen'] ?? true,
+          openingHours: data['openingHours'] ?? '9:00 AM - 9:00 PM',
+          services: List<String>.from(data['services'] ?? []),
+        );
+      }
+      return null;
+    });
   }
 
-  Future<UserModel?> getPharmacyById(String pharmacyId) async {
+  Future<PharmacyModel?> getPharmacyById(String pharmacyId) async {
     try {
       DocumentSnapshot doc = await _db.collection('users').doc(pharmacyId).get();
       if (doc.exists && doc.data() != null) {
-        return UserModel.fromMap(doc.data() as Map<String, dynamic>);
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+
+        // Convert UserModel data to PharmacyModel
+        return PharmacyModel(
+          id: doc.id,
+          name: data['pharmacyName'] ?? data['name'] ?? 'Unknown Pharmacy',
+          description: data['bio'] ?? '',
+          address: data['pharmacyAddress'] ?? data['location'] ?? '',
+          contactNumber: data['pharmacyContact'] ?? data['phoneNumber'] ?? '',
+          email: data['email'] ?? '',
+          latitude: (data['latitude'] ?? 0.0).toDouble(),
+          longitude: (data['longitude'] ?? 0.0).toDouble(),
+          profileImageUrl: data['profileImageUrl'] ?? '',
+          rating: (data['rating'] ?? 0.0).toDouble(),
+          reviewCount: (data['reviewCount'] ?? 0).toInt(),
+          isOpen: data['isOpen'] ?? true,
+          openingHours: data['openingHours'] ?? '9:00 AM - 9:00 PM',
+          services: List<String>.from(data['services'] ?? []),
+        );
       }
     } catch (e) {
       print("Error getting pharmacy by ID: $e");
@@ -104,6 +140,7 @@ class FirestoreService {
     return null;
   }
 
+  // ADDED: getOtherPharmacies method
   Stream<List<UserModel>> getOtherPharmacies(String currentPharmacyId) {
     return _db
         .collection('users')
@@ -113,6 +150,35 @@ class FirestoreService {
         .map((snapshot) => snapshot.docs
         .map((doc) => UserModel.fromMap(doc.data() as Map<String, dynamic>))
         .where((user) => user.uid != currentPharmacyId)
+        .toList());
+  }
+
+  // KEEP ONLY ONE getPharmacies METHOD
+  Stream<List<PharmacyModel>> getPharmaciesStream() {
+    return _db
+        .collection('users')
+        .where('role', isEqualTo: 'pharmacy')
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+        .map((doc) {
+      Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+      return PharmacyModel(
+        id: doc.id,
+        name: data['pharmacyName'] ?? data['name'] ?? 'Unknown Pharmacy',
+        description: data['bio'] ?? '',
+        address: data['pharmacyAddress'] ?? data['location'] ?? '',
+        contactNumber: data['pharmacyContact'] ?? data['phoneNumber'] ?? '',
+        email: data['email'] ?? '',
+        latitude: (data['latitude'] ?? 0.0).toDouble(),
+        longitude: (data['longitude'] ?? 0.0).toDouble(),
+        profileImageUrl: data['profileImageUrl'] ?? '',
+        rating: (data['rating'] ?? 0.0).toDouble(),
+        reviewCount: (data['reviewCount'] ?? 0).toInt(),
+        isOpen: data['isOpen'] ?? true,
+        openingHours: data['openingHours'] ?? '9:00 AM - 9:00 PM',
+        services: List<String>.from(data['services'] ?? []),
+      );
+    })
         .toList());
   }
 
@@ -372,8 +438,8 @@ class FirestoreService {
       int newQuantity = (cartDoc['quantity'] ?? 0) + 1;
       await cart.doc(cartDoc.id).update({'quantity': newQuantity});
     } else {
-      UserModel? pharmacy = await getPharmacyById(medicine.pharmacyId);
-      String pName = pharmacy?.pharmacyName ?? pharmacy?.name ?? 'Unknown Pharmacy';
+      PharmacyModel? pharmacy = await getPharmacyById(medicine.pharmacyId);
+      String pName = pharmacy?.name ?? 'Unknown Pharmacy';
       Map<String, dynamic> newItem = {
         'medicineId': medicine.id,
         'medicineName': medicine.medicineName,
@@ -539,16 +605,46 @@ class FirestoreService {
         snapshot.docs.map((doc) => OrderModel.fromSnapshot(doc)).toList());
   }
 
+  // In your FirestoreService class, update the getPharmacyOrders method:
+
   Stream<List<OrderModel>> getPharmacyOrders() {
     final String? uid = currentUserId;
     if (uid == null) return Stream.value([]);
-    return _db
-        .collection('orders')
-        .where('pharmacyId', isEqualTo: uid)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) =>
-        snapshot.docs.map((doc) => OrderModel.fromSnapshot(doc)).toList());
+
+    try {
+      return _db
+          .collection('orders')
+          .where('pharmacyId', isEqualTo: uid)
+          .orderBy('createdAt', descending: true)
+          .snapshots()
+          .handleError((error) {
+        print('Error fetching pharmacy orders: $error');
+        // You can add additional error handling here
+      })
+          .map((snapshot) =>
+          snapshot.docs.map((doc) => OrderModel.fromSnapshot(doc)).toList());
+    } catch (e) {
+      print('Error in getPharmacyOrders: $e');
+      return Stream.value([]);
+    }
+  }
+
+// Add a method to check if index exists or create it programmatically
+  Future<bool> checkAndCreateIndex() async {
+    try {
+      // Test the query to see if index exists
+      final testQuery = _db
+          .collection('orders')
+          .where('pharmacyId', isEqualTo: 'test')
+          .orderBy('createdAt', descending: true)
+          .limit(1);
+
+      await testQuery.get();
+      return true;
+    } catch (e) {
+      print('Index may not exist: $e');
+      return false;
+    }
   }
 
   Stream<QuerySnapshot> getPharmacyEarnings() {
@@ -629,5 +725,58 @@ class FirestoreService {
       'review': review,
       'createdAt': Timestamp.now(),
     });
+  }
+
+  // ADDED: Logic to update pharmacy rating
+  Future<void> submitPharmacyRating({
+    required String pharmacyId,
+    required double rating,
+    required String review,
+    required String orderId,
+  }) async {
+    try {
+      if (currentUserId == null) throw Exception('User not logged in');
+
+      // 1. Get the current pharmacy data (UserModel)
+      DocumentReference pharmacyRef = _db.collection('users').doc(pharmacyId);
+      DocumentSnapshot doc = await pharmacyRef.get();
+
+      if (!doc.exists) {
+        throw Exception('Pharmacy not found.');
+      }
+
+      Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+      // These fields are stored in the UserModel doc for the pharmacy
+      double currentRating = (data['rating'] ?? 0.0).toDouble();
+      int reviewCount = (data['reviewCount'] ?? 0).toInt();
+
+      // 2. Calculate the new aggregated rating
+      final double newRating = ((currentRating * reviewCount) + rating) / (reviewCount + 1);
+      final int newReviewCount = reviewCount + 1;
+
+      // 3. Update the pharmacy's profile with the new rating/count
+      await pharmacyRef.update({
+        'rating': newRating,
+        'reviewCount': newReviewCount,
+      });
+
+      // 4. Record the specific review
+      await pharmacyRef.collection('reviews').add({
+        'userId': currentUserId,
+        'rating': rating,
+        'review': review,
+        'orderId': orderId,
+        'createdAt': Timestamp.now(),
+      });
+
+      // 5. Update the order to mark feedback as given (optional, but good practice)
+      await _db.collection('orders').doc(orderId).update({
+        'isFeedbackSubmitted': true,
+      });
+
+    } catch (e) {
+      print('Error submitting pharmacy rating: $e');
+      rethrow;
+    }
   }
 }
