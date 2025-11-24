@@ -1,5 +1,10 @@
+// medicine_detail_page.dart
 import 'package:abc_app/models/medicine_model.dart';
+import 'package:abc_app/models/pharmacy_model.dart';
 import 'package:abc_app/models/user_model.dart';
+import 'package:abc_app/models/cart_item_model.dart'; // Add this import
+import 'package:abc_app/screens/patient/checkout_page.dart';
+import 'package:abc_app/screens/patient/pharmacy_detail_page.dart'; // <-- 1. IMPORT ADDED
 import 'package:abc_app/services/firestore_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; // For date formatting
@@ -16,7 +21,7 @@ class MedicineDetailPage extends StatefulWidget {
 class _MedicineDetailPageState extends State<MedicineDetailPage> {
   final FirestoreService _firestoreService = FirestoreService();
   MedicineModel? _medicine;
-  UserModel? _pharmacy; // To hold pharmacy details
+  PharmacyModel? _pharmacy; // Changed from UserModel to PharmacyModel
   bool _isLoading = true;
 
   @override
@@ -34,8 +39,9 @@ class _MedicineDetailPageState extends State<MedicineDetailPage> {
 
       if (medicine != null) {
         // 2. If medicine exists, fetch the pharmacy details
-        UserModel? pharmacy =
+        PharmacyModel? pharmacy =
         await _firestoreService.getPharmacyById(medicine.pharmacyId);
+
         setState(() {
           _medicine = medicine;
           _pharmacy = pharmacy;
@@ -53,6 +59,44 @@ class _MedicineDetailPageState extends State<MedicineDetailPage> {
           SnackBar(content: Text('Failed to load medicine details: $e')),
         );
       }
+    }
+  }
+
+  // Method to handle Buy Now button press
+  void _onBuyNowPressed() {
+    if (_medicine != null && _pharmacy != null) {
+      // Create a CartItemModel from the medicine
+      CartItemModel cartItem = CartItemModel(
+        medicineId: _medicine!.id!,
+        medicineName: _medicine!.medicineName,
+        imageUrl: _medicine!.imageUrl,
+        price: _medicine!.price,
+        quantity: 1, // Default quantity for Buy Now
+        pharmacyId: _medicine!.pharmacyId,
+        pharmacyName: _pharmacy!.name,
+        id: '',
+      );
+
+      // Calculate order totals
+      double subtotal = _medicine!.price.toDouble();
+      double shipping = 0.0; // You can calculate shipping based on your logic
+      double total = subtotal + shipping;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CheckoutPage(
+            cartItems: [cartItem], // Pass as list with one item
+            subtotal: subtotal,
+            shipping: shipping,
+            total: total,
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to proceed with purchase')),
+      );
     }
   }
 
@@ -86,8 +130,8 @@ class _MedicineDetailPageState extends State<MedicineDetailPage> {
     String expiryDateFormatted =
     DateFormat('dd MMMM yyyy').format(_medicine!.expiryDate.toDate());
 
-    // Get pharmacy name, fallback to 'Unknown'
-    String pharmacyName = _pharmacy?.pharmacyName ?? _pharmacy?.name ?? 'Unknown Pharmacy';
+    // Get pharmacy name from PharmacyModel
+    String pharmacyName = _pharmacy?.name ?? 'Unknown Pharmacy';
 
     return Column(
       children: [
@@ -114,7 +158,8 @@ class _MedicineDetailPageState extends State<MedicineDetailPage> {
                             : null,
                       ),
                       child: _medicine!.imageUrl.isEmpty
-                          ? Icon(Icons.medication_liquid, size: 100, color: Colors.grey[400])
+                          ? Icon(Icons.medication_liquid,
+                          size: 100, color: Colors.grey[400])
                           : null,
                     ),
                   ),
@@ -123,7 +168,8 @@ class _MedicineDetailPageState extends State<MedicineDetailPage> {
                   // Medicine Name
                   Text(
                     _medicine!.medicineName,
-                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        fontSize: 28, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
 
@@ -137,12 +183,12 @@ class _MedicineDetailPageState extends State<MedicineDetailPage> {
                   const SizedBox(height: 16),
 
                   // Details: Expiry Date, Category, Pharmacy Name
-                  _buildDetailRow(
-                      'Expiry Date:', expiryDateFormatted, Icons.calendar_today_outlined),
+                  _buildDetailRow('Expiry Date:', expiryDateFormatted,
+                      Icons.calendar_today_outlined),
                   _buildDetailRow(
                       'Category:', _medicine!.category, Icons.category_outlined),
-                  _buildDetailRow(
-                      'Pharmacy:', pharmacyName, Icons.local_pharmacy_outlined),
+                  _buildDetailRow('Pharmacy:', pharmacyName,
+                      Icons.local_pharmacy_outlined),
                   const SizedBox(height: 24),
 
                   // "Other Pharmacies" Section (Replaces "Nearby")
@@ -155,19 +201,13 @@ class _MedicineDetailPageState extends State<MedicineDetailPage> {
 
                   const SizedBox(height: 32),
 
-                  //
-                  // vvvv THIS IS THE CHANGE vvvv
-                  //
                   // More Medicines Section
                   const Text(
-                    'More Medicines', // <-- CHANGED
+                    'More Medicines',
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 16),
-                  _buildMoreMedicinesList(_medicine!.id!), // <-- CHANGED
-                  //
-                  // ^^^^ THIS IS THE CHANGE ^^^^
-                  //
+                  _buildMoreMedicinesList(_medicine!.id!),
                 ],
               ),
             ),
@@ -226,33 +266,52 @@ class _MedicineDetailPageState extends State<MedicineDetailPage> {
             final pharmacy = pharmacies[index];
             bool hasImage = pharmacy.profileImageUrl.isNotEmpty;
 
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12.0),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey[50],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey[200]!),
-                ),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundImage: hasImage ? NetworkImage(pharmacy.profileImageUrl) : null,
-                      backgroundColor: Colors.blueGrey[100],
-                      child: !hasImage ? const Icon(Icons.local_pharmacy, size: 20, color: Colors.white) : null,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        pharmacy.pharmacyName ?? pharmacy.name,
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w500),
+            // <-- 2. WRAPPED WITH GESTUREDETECTOR -->
+            return GestureDetector(
+              onTap: () {
+                // <-- 3. ADDED ONTAP NAVIGATION -->
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        PharmacyDetailPage(pharmacyId: pharmacy.uid!),
+                  ),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey[200]!),
+                  ),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundImage: hasImage
+                            ? NetworkImage(pharmacy.profileImageUrl)
+                            : null,
+                        backgroundColor: Colors.blueGrey[100],
+                        child: !hasImage
+                            ? const Icon(Icons.local_pharmacy,
+                            size: 20, color: Colors.white)
+                            : null,
                       ),
-                    ),
-                    const Icon(Icons.location_on_outlined, color: Color(0xFF0052CC)),
-                  ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          pharmacy.pharmacyName ?? pharmacy.name,
+                          style: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                      const Icon(Icons.location_on_outlined,
+                          color: Color(0xFF0052CC)),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -262,21 +321,12 @@ class _MedicineDetailPageState extends State<MedicineDetailPage> {
     );
   }
 
-  //
-  // vvvv THIS FUNCTION IS RENAMED vvvv
-  //
   // This widget builds the "More Medicines" list dynamically
   Widget _buildMoreMedicinesList(String currentMedicineId) {
     return SizedBox(
       height: 200, // Fixed height for the horizontal list
       child: StreamBuilder<List<MedicineModel>>(
-        //
-        // vvvv THIS IS THE CHANGE vvvv
-        //
-        stream: _firestoreService.getMoreMedicines(currentMedicineId), // <-- Call new function
-        //
-        // ^^^^ THIS IS THE CHANGE ^^^^
-        //
+        stream: _firestoreService.getMoreMedicines(currentMedicineId),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
@@ -292,7 +342,7 @@ class _MedicineDetailPageState extends State<MedicineDetailPage> {
             itemCount: similarMedicines.length,
             itemBuilder: (context, index) {
               final similarMedicine = similarMedicines[index];
-              return _buildSimilarMedicineCard(similarMedicine); // We can reuse the same card widget
+              return _buildSimilarMedicineCard(similarMedicine);
             },
           );
         },
@@ -307,7 +357,8 @@ class _MedicineDetailPageState extends State<MedicineDetailPage> {
     return GestureDetector(
       onTap: () {
         // Navigate to detail page of similar medicine
-        Navigator.pushReplacement( // Use replacement to avoid stack build-up
+        Navigator.pushReplacement(
+          // Use replacement to avoid stack build-up
           context,
           MaterialPageRoute(
             builder: (context) => MedicineDetailPage(medicineId: medicine.id!),
@@ -337,14 +388,19 @@ class _MedicineDetailPageState extends State<MedicineDetailPage> {
                 width: double.infinity,
                 decoration: BoxDecoration(
                   color: Colors.grey[100],
-                  borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(12)),
-                  image: hasImage ? DecorationImage(
+                  borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(12)),
+                  image: hasImage
+                      ? DecorationImage(
                     image: NetworkImage(medicine.imageUrl),
                     fit: BoxFit.contain,
-                  ) : null,
+                  )
+                      : null,
                 ),
-                child: !hasImage ? Icon(Icons.medication_liquid, color: Colors.grey[400], size: 40) : null,
+                child: !hasImage
+                    ? Icon(Icons.medication_liquid,
+                    color: Colors.grey[400], size: 40)
+                    : null,
               ),
             ),
             Padding(
@@ -362,8 +418,7 @@ class _MedicineDetailPageState extends State<MedicineDetailPage> {
                   const SizedBox(height: 4),
                   Text(
                     'Qty: ${medicine.quantity}',
-                    style: TextStyle(
-                        color: Colors.grey[600], fontSize: 12),
+                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -404,7 +459,9 @@ class _MedicineDetailPageState extends State<MedicineDetailPage> {
                 if (_medicine != null) {
                   _firestoreService.addToCart(_medicine!);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Added ${_medicine!.medicineName} to cart!')),
+                    SnackBar(
+                        content:
+                        Text('Added ${_medicine!.medicineName} to cart!')),
                   );
                 }
               },
@@ -421,14 +478,10 @@ class _MedicineDetailPageState extends State<MedicineDetailPage> {
           const SizedBox(width: 16),
           Expanded(
             child: ElevatedButton(
-              onPressed: () {
-                // TODO: Implement Buy Now logic
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Buying Now! (Dummy)')),
-                );
-              },
+              onPressed: _onBuyNowPressed, // Use the new method
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0052CC), // Button background color
+                backgroundColor:
+                const Color(0xFF0052CC), // Button background color
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),

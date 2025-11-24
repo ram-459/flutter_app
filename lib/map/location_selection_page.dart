@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:abc_app/models/location_model.dart';
 import 'package:abc_app/services/map_service.dart';
-import 'map_page.dart';
+import '../screens/map/map_page.dart';
+
 
 class LocationSelectionPage extends StatefulWidget {
   final bool forPharmacy;

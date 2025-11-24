@@ -3,6 +3,7 @@ import 'package:abc_app/models/user_model.dart';
 import 'package:abc_app/screens/patient/add_address_page.dart';
 import 'package:abc_app/screens/patient/my_orders_page.dart';
 import 'package:abc_app/screens/patient/saved_addresses_page.dart';
+import 'package:abc_app/screens/settings_screen.dart';
 import 'package:abc_app/services/firestore_service.dart'; // <-- Import new service
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -29,7 +30,7 @@ class ProfilePage extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const PlaceholderPage(title: 'Settings')));
+              Navigator.push(context, MaterialPageRoute(builder: (context) => SettingsScreen()));
             },
           ),
         ],

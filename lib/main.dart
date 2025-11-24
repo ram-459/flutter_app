@@ -1,4 +1,3 @@
-// main.dart
 import 'package:abc_app/checkuser.dart';
 import 'package:abc_app/loginpage.dart';
 import 'package:abc_app/screens/onboarding1.dart';

@@ -1,9 +1,13 @@
 import 'dart:io';
 import 'package:abc_app/models/medicine_model.dart';
+import 'package:abc_app/models/medicine_template_model.dart';
 import 'package:abc_app/services/firestore_service.dart';
+import 'package:abc_app/services/medicine_data_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart'; // Make sure you have this package
+import 'package:image_picker/image_picker.dart';
+
+import 'medicine_picker_page.dart';
 
 class AddMedicinePage extends StatefulWidget {
   const AddMedicinePage({super.key});
@@ -15,6 +19,7 @@ class AddMedicinePage extends StatefulWidget {
 class _AddMedicinePageState extends State<AddMedicinePage> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final FirestoreService _firestoreService = FirestoreService();
+  final MedicineDataService _medicineDataService = MedicineDataService();
 
   // Controllers
   final TextEditingController _nameController = TextEditingController();
@@ -24,7 +29,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _categoryController = TextEditingController();
 
-  File? _imageFile; // This variable will hold your selected image
+  File? _imageFile;
   DateTime? _selectedExpiryDate;
   bool _inStock = true;
   bool _isFeatured = false;
@@ -56,14 +61,37 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
     }
   }
 
+  // New method to open medicine picker
+  Future<void> _openMedicinePicker() async {
+    final MedicineTemplateModel? result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const MedicinePickerPage()),
+    );
+
+    if (result != null && mounted) {
+      // Pre-fill the form with selected medicine data
+      setState(() {
+        _nameController.text = result.name;
+        _categoryController.text = result.category;
+        _descController.text = result.description;
+
+        // Set default values for other fields
+        if (_priceController.text.isEmpty) {
+          _priceController.text = '0';
+        }
+        if (_quantityController.text.isEmpty) {
+          _quantityController.text = '1';
+        }
+      });
+    }
+  }
+
   Future<void> _saveMedicine() async {
-    // Check includes validation for the image file
     if (_formKey.currentState!.validate() &&
         _imageFile != null &&
         _selectedExpiryDate != null) {
       setState(() => _isLoading = true);
 
-      // Check if file still exists (this prevents a crash)
       if (!await _imageFile!.exists()) {
         setState(() => _isLoading = false);
         if (mounted) {
@@ -86,18 +114,11 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
           category: _categoryController.text.trim(),
           inStock: _inStock,
           isFeatured: _isFeatured,
-          imageUrl: '', // This will be set by the FirestoreService
-          pharmacyId: '', // This will be set by the FirestoreService
+          imageUrl: '',
+          pharmacyId: '',
         );
 
-        //
-        // vvvv THIS IS THE FIX vvvv
-        //
-        // Pass BOTH arguments to the function, as expected
         await _firestoreService.addMedicine(newMedicine, _imageFile!);
-        //
-        // ^^^^ THIS IS THE FIX ^^^V
-        //
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -147,9 +168,15 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // This is the image picker widget
+              // Medicine Picker Button
+              _buildMedicinePickerButton(),
+              const SizedBox(height: 16),
+
+              // Image Picker
               _buildImagePicker(),
               const SizedBox(height: 24),
+
+              // Form Fields
               _buildTextFormField(_nameController, 'Medicine Name'),
               _buildTextFormField(_priceController, 'Price (₹)',
                   keyboardType: TextInputType.number),
@@ -178,7 +205,26 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
     );
   }
 
-  // Widget to show the selected image (or a prompt to upload)
+  // New widget for medicine picker button
+  Widget _buildMedicinePickerButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: _openMedicinePicker,
+        icon: const Icon(Icons.medical_services),
+        label: const Text('Pick from Medicine Database'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.green,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildImagePicker() {
     return GestureDetector(
       onTap: _pickImage,
